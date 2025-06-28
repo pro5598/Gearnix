@@ -4,15 +4,15 @@ const app = express();
 
 const PORT = 6969;
 
-require('dotenv').config();
+require("dotenv").config();
 
-
-const { router } = require("./routes/userRoute");
+const userRoutes = require("./routes/userRoute");
+const productRoutes = require("./routes/productRoute");
 
 app.use(express.json());
-app.use("/api", router);
+app.use("/api", userRoutes);
+app.use("/api", productRoutes);
 
 app.listen(PORT, () => {
   console.log("Connected");
 });
-
