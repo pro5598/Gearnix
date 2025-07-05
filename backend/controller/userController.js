@@ -60,9 +60,26 @@ const deleteById = async (req, res) => {
   }
 };
 
+// Get user by ID
+const getUserById = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await Users.findOne({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({ data: user, message: "User fetched successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Error fetching user" });
+  }
+};
+
+
 module.exports = {
   getAllEmployee,
   saveAllEmployee,
   updateEmployeeById,
   deleteById,
+  getUserById
 };
