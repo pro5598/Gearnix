@@ -24,6 +24,10 @@ import {
 } from "lucide-react";
 import Navbar from "../components/common/Navbar.jsx";
 import Footer from "../components/common/Footer.jsx";
+import image from "../assets/logo/image.png"
+import imagem from "../assets/logo/imagemouse.png"
+import imagek from "../assets/logo/image copy.png"
+import imageh from "../assets/logo/image copy 2.png"
 
 export default function Home() {
   const navigate = useNavigate();
@@ -34,30 +38,27 @@ export default function Home() {
       name: "RGB Gaming Mouse",
       price: "$49.99",
       originalPrice: "$69.99",
-      image: "/api/placeholder/300/200",
+      image: imagem,
       rating: 4.8,
       reviews: 124,
-      badge: "Best Seller"
     },
     {
       id: 2,
       name: "Mechanical Keyboard",
       price: "$89.99",
       originalPrice: "$119.99",
-      image: "/api/placeholder/300/200",
+      image:imagek,
       rating: 4.9,
       reviews: 89,
-      badge: "New"
     },
     {
       id: 3,
       name: "Wireless Gaming Headset",
       price: "$79.99",
       originalPrice: "$99.99",
-      image: "/api/placeholder/300/200",
+      image: imageh,
       rating: 4.7,
       reviews: 156,
-      badge: "Sale"
     }
   ];
 
@@ -136,7 +137,7 @@ export default function Home() {
             <div className="relative mt-8 lg:mt-0">
               <div className="relative z-10 bg-gradient-to-br from-purple-600/20 to-pink-600/20 rounded-2xl p-6 sm:p-8 backdrop-blur-sm border border-purple-500/30">
                 <img
-                  src="/api/placeholder/500/400"
+                  src={image}
                   alt="Gaming Setup"
                   className="w-full h-64 sm:h-80 lg:h-96 object-cover rounded-xl"
                 />
@@ -169,9 +170,6 @@ export default function Home() {
                       alt={product.name}
                       className="w-full h-48 sm:h-56 object-cover rounded-t-lg"
                     />
-                    <Badge className="absolute top-3 left-3 bg-purple-600 text-white">
-                      {product.badge}
-                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6">
