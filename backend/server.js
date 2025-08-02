@@ -1,21 +1,47 @@
-const express = require("express");
-
-const app = express();
-
-const PORT = 6969;
-
+// server.js
+const app = require('./app');
+const { testConnection, sequelize } = require('./viable/db');
 require("dotenv").config();
 
-const userRoutes = require("./routes/userRoute");
-const productRoutes = require("./routes/productRoute");
-const authRoute = require("./routes/authRoute.js");
+const PORT = process.env.PORT || 5000;
 
-app.use(express.json());
-app.use("/api", userRoutes);
-app.use("/api", productRoutes);
-app.use("/api/auth", authRoute);
+const startServer = async () => {
+  try {
+    // Test database connection
+    await testConnection();
+    
+    // Sync database models with alter: true to update existing tables
+    await sequelize.sync({ 
+      force: false,     // Don't drop existing tables
+      alter: true,      // Update existing tables to match models (fixes field length issues)
+      logging: console.log // Show SQL commands being executed
+    });
+    console.log('✅ Database models synchronized');
+    
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+      console.log(`📡 Health check: http://localhost:${PORT}/health`);
+      console.log(`📁 Uploads directory: ${__dirname}/uploads`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
 
-
-app.listen(PORT, () => {
-  console.log("Connected");
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Promise Rejection:', err);
+  process.exit(1);
 });
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+startServer();
