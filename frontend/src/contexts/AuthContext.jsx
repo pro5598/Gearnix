@@ -175,7 +175,7 @@ export const AuthProvider = ({ children }) => {
     refreshToken,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
-    isUser: user?.role === 'user' || user?.role === 'admin',
+    isUser: user?.role === 'user',
     loading,
     tokenWarning
   };
