@@ -113,8 +113,7 @@ export default function AdminReviews() {
             recommend: review.recommend,
             date: new Date(review.createdAt).toISOString().split('T')[0],
             verified: review.isVerifiedPurchase,
-            helpful: 0, // You can add this feature later
-            totalVotes: 0 // You can add this feature later
+
           };
         });
         
@@ -301,19 +300,7 @@ export default function AdminReviews() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-xs font-medium">Helpful Votes</p>
-                  <p className="text-2xl font-bold text-white">
-                    {reviews.reduce((sum, r) => sum + r.helpful, 0)}
-                  </p>
-                </div>
-                <ThumbsUp className="h-8 w-8 text-green-400" />
-              </div>
-            </CardContent>
-          </Card>
+
         </div>
 
         {/* Search and Filters */}

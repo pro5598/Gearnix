@@ -30,7 +30,10 @@ const User = sequelize.define(
     username: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      unique: {
+        name: "users_username_unique",
+        msg: "Username must be unique",
+      },
       validate: {
         notEmpty: true,
         len: [3, 30],
@@ -40,7 +43,10 @@ const User = sequelize.define(
     email: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      unique: {
+        name: "users_email_unique",
+        msg: "Email must be unique",
+      },
       validate: {
         notEmpty: true,
         isEmail: true,
@@ -61,10 +67,12 @@ const User = sequelize.define(
     role: {
       type: DataTypes.ENUM("user", "admin"),
       defaultValue: "user",
+      allowNull: false,
     },
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
+      allowNull: false,
     },
     lastLogin: {
       type: DataTypes.DATE,
@@ -73,7 +81,9 @@ const User = sequelize.define(
   },
   {
     tableName: "users",
-    timestamps: true, // adds createdAt and updatedAt
+    timestamps: true,
+    // Disable automatic index queries that cause the error
+    indexes: [], // Empty array to prevent automatic index detection
     hooks: {
       // Hash password before saving
       beforeCreate: async (user) => {
@@ -89,7 +99,7 @@ const User = sequelize.define(
         }
       },
     },
-  },
+  }
 );
 
 // Instance method to check password

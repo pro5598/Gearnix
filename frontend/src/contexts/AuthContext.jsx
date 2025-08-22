@@ -1,6 +1,7 @@
-// contexts/AuthContext.jsx - Updated with token expiration checking
+// contexts/AuthContext.jsx - Updated with role-based access control
 import { createContext, useContext, useState, useEffect } from 'react';
-import { jwtDecode } from 'jwt-decode'; // Updated import
+import { useNavigate, useLocation } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext();
 
@@ -43,10 +44,55 @@ const isTokenExpiringSoon = (token) => {
   }
 };
 
+// NEW: Check if user has access to a specific route
+const hasRouteAccess = (userRole, pathname) => {
+  console.log('🔍 Checking route access:', { userRole, pathname });
+  
+  // Public routes - accessible to all
+  const publicRoutes = ['/', '/login', '/register', '/about', '/contact'];
+  if (publicRoutes.includes(pathname)) {
+    return true;
+  }
+  
+  // Admin routes - only accessible to admins
+  const adminRoutes = ['/admin'];
+  const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route));
+  if (isAdminRoute) {
+    const hasAccess = userRole === 'admin';
+    console.log(`🔐 Admin route access: ${hasAccess ? 'GRANTED' : 'DENIED'}`);
+    return hasAccess;
+  }
+  
+  // User routes - only accessible to regular users
+  const userRoutes = ['/user'];
+  const isUserRoute = userRoutes.some(route => pathname.startsWith(route));
+  if (isUserRoute) {
+    const hasAccess = userRole === 'user';
+    console.log(`🔐 User route access: ${hasAccess ? 'GRANTED' : 'DENIED'}`);
+    return hasAccess;
+  }
+  
+  // Default: allow access if authenticated (for other routes like /shop, /products, etc.)
+  return !!userRole;
+};
+
+// NEW: Get redirect path based on user role
+const getDefaultRedirectPath = (userRole) => {
+  switch (userRole) {
+    case 'admin':
+      return '/admin/dashboard';
+    case 'user':
+      return '/user/dashboard';
+    default:
+      return '/';
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tokenWarning, setTokenWarning] = useState(false);
+  const location = useLocation();
 
   // Check authentication and token validity on app start
   useEffect(() => {
@@ -104,6 +150,27 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  // NEW: Route access control - Check on every route change
+  useEffect(() => {
+    if (loading || !user) return;
+
+    const currentPath = location.pathname;
+    const userRole = user.role;
+
+    // Check if user has access to current route
+    if (!hasRouteAccess(userRole, currentPath)) {
+      console.log('⚠️ Access denied to current route, redirecting...');
+      
+      // Show warning message
+      const roleText = userRole === 'admin' ? 'administrator' : 'user';
+      alert(`Access denied! You are logged in as ${roleText} and cannot access this section.`);
+      
+      // Redirect to appropriate dashboard
+      const redirectPath = getDefaultRedirectPath(userRole);
+      window.location.replace(redirectPath);
+    }
+  }, [location.pathname, user, loading]);
+
   // Periodic token check every 5 minutes
   useEffect(() => {
     if (!user) return;
@@ -157,10 +224,26 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('user');
       setUser(null);
       setTokenWarning(false);
+      
+      // Redirect to login page
+      window.location.href = '/login';
+      
       console.log('✅ AuthContext: User logged out successfully');
     } catch (error) {
       console.error('❌ AuthContext: Error during logout:', error);
     }
+  };
+
+  // NEW: Check if user can access a specific route
+  const canAccessRoute = (pathname) => {
+    if (!user) return false;
+    return hasRouteAccess(user.role, pathname);
+  };
+
+  // NEW: Get appropriate redirect URL for current user
+  const getRedirectPath = () => {
+    if (!user) return '/login';
+    return getDefaultRedirectPath(user.role);
   };
 
   const refreshToken = async () => {
@@ -177,7 +260,10 @@ export const AuthProvider = ({ children }) => {
     isAdmin: user?.role === 'admin',
     isUser: user?.role === 'user',
     loading,
-    tokenWarning
+    tokenWarning,
+    canAccessRoute, // NEW: Method to check route access
+    getRedirectPath, // NEW: Method to get redirect path
+    hasRouteAccess: (pathname) => user ? hasRouteAccess(user.role, pathname) : false, // NEW: Direct access check
   };
 
   return (

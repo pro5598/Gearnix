@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { orderAPI } from "../../../services/orderAPI";
 import { productAPI } from "../../../services/api";
+import { userAPI } from "../../../services/userAPI";
 import {
   Users,
   Package,
@@ -40,12 +41,22 @@ export default function AdminDashboard() {
       thisMonthRevenue: 0,
       completedOrders: 0,
       processingOrders: 0,
-      cancelledOrders: 0
+      cancelledOrders: 0,
+      averageOrderValue: 0
     },
     productStats: {
       activeProducts: 0,
       lowStockProducts: 0,
       outOfStockProducts: 0
+    },
+    userStats: {
+      totalUsers: 0,
+      activeUsers: 0,
+      inactiveUsers: 0,
+      adminUsers: 0,
+      regularUsers: 0,
+      newUsersThisMonth: 0,
+      newUsersToday: 0
     }
   });
 
@@ -59,11 +70,14 @@ export default function AdminDashboard() {
       setLoading(true);
       setError(null);
 
-      // Fetch data in parallel
+      console.log('🔄 Starting admin dashboard data fetch...');
+
+      // Fetch data in parallel using the new database endpoints
       await Promise.all([
-        fetchAllOrders(),
-        fetchAllProducts(),
-        fetchUserCount() // You'll need to implement this API endpoint
+        fetchOrderStats(),      // Use database stats instead of complex calculation
+        fetchRecentOrders(),    // Get recent orders from database
+        fetchAllProducts(),     // Keep existing product logic
+        fetchUserStats()        // Keep existing user stats logic
       ]);
 
       console.log('✅ Admin dashboard data loaded successfully');
@@ -75,179 +89,117 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchAllOrders = async () => {
+  // NEW: Fetch order statistics directly from database
+  const fetchOrderStats = async () => {
     try {
-      console.log('🔄 Fetching all orders for admin dashboard...');
+      console.log('📊 Fetching order statistics from database...');
       
-      // Try different API endpoints for admin
-      let response;
-      try {
-        response = await orderAPI.getOrders(); // This should get all orders for admin
-        console.log('📡 Admin orders API response:', response);
-      } catch (firstError) {
-        console.log('❌ getOrders failed, trying alternative:', firstError);
-        try {
-          response = await orderAPI.getUserOrders();
-          console.log('📡 Fallback orders API response:', response);
-        } catch (secondError) {
-          console.error('❌ Both API calls failed:', secondError);
-          throw new Error('Unable to fetch orders from any API endpoint');
-        }
-      }
+      const response = await orderAPI.getOrderStats();
       
-      if (response && (response.success || response.orders || Array.isArray(response))) {
-        let orders = [];
+      if (response.success && response.data) {
+        const stats = response.data;
         
-        // Handle different response structures
-        if (response.orders) {
-          orders = response.orders;
-        } else if (Array.isArray(response.data)) {
-          orders = response.data;
-        } else if (Array.isArray(response)) {
-          orders = response;
-        }
+        console.log('📊 Raw order stats from database:', stats);
         
-        console.log('📊 Total orders loaded:', orders.length);
-
-        // Calculate comprehensive stats
-        const totalOrders = orders.length;
-        let totalRevenue = 0;
-        let pendingOrders = 0;
-        let completedOrders = 0;
-        let processingOrders = 0;
-        let cancelledOrders = 0;
-        
-        // Get current month data
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        let thisMonthOrders = 0;
-        let thisMonthRevenue = 0;
-
-        orders.forEach((order) => {
-          // Calculate revenue using multiple field strategies
-          let orderTotal = 0;
-          const possibleTotalFields = ['total', 'totalAmount', 'subtotal', 'price', 'amount', 'finalAmount'];
-          
-          for (const fieldName of possibleTotalFields) {
-            const fieldValue = order[fieldName];
-            if (fieldValue !== undefined && fieldValue !== null && !isNaN(parseFloat(fieldValue)) && fieldValue > 0) {
-              orderTotal = parseFloat(fieldValue);
-              break;
-            }
-          }
-
-          // Calculate from items if no total field found
-          if (orderTotal === 0 && order.items && order.items.length > 0) {
-            orderTotal = order.items.reduce((sum, item) => {
-              const itemPrice = parseFloat(item.price || item.product?.price || 0);
-              const itemQuantity = parseInt(item.quantity || 1);
-              return sum + (itemPrice * itemQuantity);
-            }, 0);
-          }
-
-          totalRevenue += orderTotal;
-
-          // Count order statuses
-          const status = (order.status || 'pending').toLowerCase();
-          switch (status) {
-            case 'pending':
-              pendingOrders++;
-              break;
-            case 'completed':
-            case 'delivered':
-              completedOrders++;
-              break;
-            case 'processing':
-            case 'shipped':
-              processingOrders++;
-              break;
-            case 'cancelled':
-            case 'canceled':
-              cancelledOrders++;
-              break;
-          }
-
-          // Check if order is from this month
-          const orderDate = new Date(order.createdAt || order.created_at || order.date);
-          if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) {
-            thisMonthOrders++;
-            thisMonthRevenue += orderTotal;
-          }
-        });
-
-        // Get recent orders (last 10)
-        const recentOrders = orders
-          .sort((a, b) => {
-            const dateA = new Date(a.createdAt || a.created_at || a.date || 0);
-            const dateB = new Date(b.createdAt || b.created_at || b.date || 0);
-            return dateB - dateA;
-          })
-          .slice(0, 10)
-          .map(order => {
-            let orderTotal = 0;
-            
-            // Calculate total using same logic
-            const possibleTotalFields = ['total', 'totalAmount', 'subtotal', 'price', 'amount', 'finalAmount'];
-            
-            for (const fieldName of possibleTotalFields) {
-              const fieldValue = order[fieldName];
-              if (fieldValue !== undefined && fieldValue !== null && !isNaN(parseFloat(fieldValue)) && fieldValue > 0) {
-                orderTotal = parseFloat(fieldValue);
-                break;
-              }
-            }
-
-            if (orderTotal === 0 && order.items && order.items.length > 0) {
-              orderTotal = order.items.reduce((sum, item) => {
-                const itemPrice = parseFloat(item.price || item.product?.price || 0);
-                const itemQuantity = parseInt(item.quantity || 1);
-                return sum + (itemPrice * itemQuantity);
-              }, 0);
-            }
-
-            return {
-              id: order.orderNumber || order.id,
-              customer: order.user?.firstName || order.user?.username || order.customerName || 'Unknown Customer',
-              amount: orderTotal,
-              status: order.status || 'pending',
-              time: formatTimeAgo(order.createdAt || order.created_at || order.date),
-              userId: order.userId || order.user?.id
-            };
-          });
-
-        // Update dashboard data
         setDashboardData(prev => ({
           ...prev,
-          totalOrders,
-          totalRevenue,
-          pendingOrders,
-          recentOrders,
+          totalOrders: stats.totalOrders,
+          totalRevenue: stats.totalRevenue,
+          pendingOrders: stats.ordersByStatus.processing, // Map processing to pending
           orderStats: {
-            thisMonth: thisMonthOrders,
-            thisMonthRevenue,
-            completedOrders,
-            processingOrders,
-            cancelledOrders
+            thisMonth: stats.thisMonth.orders,
+            thisMonthRevenue: stats.thisMonth.revenue,
+            completedOrders: stats.ordersByStatus.delivered,
+            processingOrders: stats.ordersByStatus.processing,
+            cancelledOrders: stats.ordersByStatus.cancelled,
+            averageOrderValue: stats.averageOrderValue
           }
         }));
 
-        console.log('📊 Order stats calculated:', {
-          totalOrders,
-          totalRevenue,
-          pendingOrders,
-          thisMonthOrders,
-          thisMonthRevenue
+        console.log('📊 Order stats updated in dashboard:', {
+          totalOrders: stats.totalOrders,
+          totalRevenue: `$${stats.totalRevenue}`,
+          thisMonth: stats.thisMonth,
+          averageOrderValue: `$${stats.averageOrderValue}`
         });
-
       } else {
-        throw new Error('Invalid orders API response');
+        throw new Error(response.message || 'Failed to fetch order statistics');
       }
     } catch (error) {
-      console.error('❌ Error fetching admin orders:', error);
+      console.error('❌ Error fetching order statistics:', error);
       throw error;
     }
   };
 
+  // NEW: Fetch recent orders directly from database
+  const fetchRecentOrders = async () => {
+    try {
+      console.log('📋 Fetching recent orders from database...');
+      
+      const response = await orderAPI.getRecentOrders(10);
+      
+      if (response.success && response.data && response.data.orders) {
+        const orders = response.data.orders;
+        
+        console.log('📋 Raw recent orders from database:', orders);
+        
+        const recentOrders = orders.map(order => {
+          // Get customer name from user relationship or customerDetails
+          let customerName = 'Unknown Customer';
+          if (order.user) {
+            customerName = `${order.user.firstName} ${order.user.lastName}`.trim();
+            if (!customerName || customerName === '') {
+              customerName = order.user.username || order.user.email || 'Unknown Customer';
+            }
+          } else if (order.customerDetails) {
+            // Parse customerDetails JSON if it exists
+            try {
+              const details = typeof order.customerDetails === 'string' 
+                ? JSON.parse(order.customerDetails) 
+                : order.customerDetails;
+              customerName = `${details.firstName || ''} ${details.lastName || ''}`.trim() 
+                || details.name 
+                || details.email 
+                || 'Unknown Customer';
+            } catch (e) {
+              console.warn('Could not parse customerDetails:', order.customerDetails);
+            }
+          }
+
+          return {
+            id: order.orderNumber || order.id,
+            customer: customerName,
+            amount: parseFloat(order.total) || 0,
+            status: order.status || 'processing',
+            time: formatTimeAgo(order.createdAt),
+            userId: order.userId
+          };
+        });
+
+        setDashboardData(prev => ({
+          ...prev,
+          recentOrders
+        }));
+
+        console.log('📋 Recent orders processed:', recentOrders);
+      } else {
+        console.warn('⚠️ No recent orders found or invalid response');
+        setDashboardData(prev => ({
+          ...prev,
+          recentOrders: []
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Error fetching recent orders:', error);
+      // Don't throw error, just set empty array
+      setDashboardData(prev => ({
+        ...prev,
+        recentOrders: []
+      }));
+    }
+  };
+
+  // Keep existing product fetch logic
   const fetchAllProducts = async () => {
     try {
       console.log('🔄 Fetching all products for admin dashboard...');
@@ -294,30 +246,55 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchUserCount = async () => {
+  // Keep existing user stats logic
+  const fetchUserStats = async () => {
     try {
-      // This endpoint would need to be implemented in your backend
-      // For now, we'll use a placeholder or calculate from orders
-      console.log('👥 Calculating user count from available data...');
+      console.log('👥 Fetching real user statistics from database...');
       
-      // You could implement a users API endpoint like:
-      // const response = await fetch('/api/admin/users/count');
-      // const data = await response.json();
-      // setDashboardData(prev => ({ ...prev, totalUsers: data.count }));
-
-      // For now, estimate from unique order users
-      if (dashboardData.recentOrders.length > 0) {
-        const uniqueUsers = new Set(dashboardData.recentOrders.map(order => order.userId).filter(Boolean));
+      const response = await userAPI.getAdminUserStats();
+      
+      if (response.success && response.data) {
+        const userStats = response.data;
+        
         setDashboardData(prev => ({
           ...prev,
-          totalUsers: uniqueUsers.size * 10 // Rough estimate
+          totalUsers: userStats.totalUsers,
+          userStats: {
+            totalUsers: userStats.totalUsers,
+            activeUsers: userStats.activeUsers,
+            inactiveUsers: userStats.inactiveUsers,
+            adminUsers: userStats.adminUsers,
+            regularUsers: userStats.regularUsers,
+            newUsersThisMonth: userStats.newUsersThisMonth,
+            newUsersToday: userStats.newUsersToday
+          }
         }));
-      }
 
+        console.log('👥 User stats loaded:', {
+          totalUsers: userStats.totalUsers,
+          activeUsers: userStats.activeUsers,
+          newUsersThisMonth: userStats.newUsersThisMonth
+        });
+      } else {
+        throw new Error(response.message || 'Failed to fetch user statistics');
+      }
     } catch (error) {
-      console.error('❌ Error fetching user count:', error);
-      // Set a default value
-      setDashboardData(prev => ({ ...prev, totalUsers: 0 }));
+      console.error('❌ Error fetching user statistics:', error);
+      
+      // Set fallback values
+      setDashboardData(prev => ({
+        ...prev,
+        totalUsers: 0,
+        userStats: {
+          totalUsers: 0,
+          activeUsers: 0,
+          inactiveUsers: 0,
+          adminUsers: 0,
+          regularUsers: 0,
+          newUsersThisMonth: 0,
+          newUsersToday: 0
+        }
+      }));
     }
   };
 
@@ -325,6 +302,8 @@ export default function AdminDashboard() {
     if (!dateString) return 'Unknown time';
     
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
     const now = new Date();
     const diffInMs = now - date;
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
@@ -342,18 +321,13 @@ export default function AdminDashboard() {
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'completed':
       case 'delivered':
-      case 'closed':
         return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'pending':
-      case 'open':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
       case 'processing':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
       case 'shipped':
         return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
       case 'cancelled':
-      case 'canceled':
         return 'bg-red-500/20 text-red-400 border-red-500/30';
       default:
         return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
@@ -385,6 +359,9 @@ export default function AdminDashboard() {
             </h1>
             <p className="text-gray-300 text-sm sm:text-base">
               Welcome to Gearnix Admin Panel - Monitor your gaming platform
+            </p>
+            <p className="text-gray-500 text-xs mt-1">
+              Data from database | Revenue: ${dashboardData.totalRevenue.toFixed(2)} | Orders: {dashboardData.totalOrders}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -422,15 +399,18 @@ export default function AdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        {/* Total Users Card */}
         <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm font-medium">Total Users</p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardData.totalUsers.toLocaleString()}
+                  {dashboardData.userStats.totalUsers.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Estimated count</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  +{dashboardData.userStats.newUsersThisMonth} this month
+                </p>
               </div>
               <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center">
                 <Users className="h-6 w-6 text-blue-400" />
@@ -439,6 +419,7 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Products Card */}
         <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -458,13 +439,14 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Total Orders Card */}
         <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm font-medium">Total Orders</p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardData.totalOrders}
+                  {dashboardData.totalOrders.toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   +{dashboardData.orderStats.thisMonth} this month
@@ -477,6 +459,7 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Revenue Card */}
         <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -496,11 +479,12 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Processing Orders Card */}
         <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm font-medium">Pending Orders</p>
+                <p className="text-gray-400 text-sm font-medium">Processing Orders</p>
                 <p className="text-2xl font-bold text-white">
                   {dashboardData.pendingOrders}
                 </p>
@@ -513,25 +497,26 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
+        {/* Average Order Value Card */}
         <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm font-medium">Low Stock</p>
+                <p className="text-gray-400 text-sm font-medium">Avg Order</p>
                 <p className="text-2xl font-bold text-white">
-                  {dashboardData.productStats.lowStockProducts}
+                  ${dashboardData.orderStats.averageOrderValue.toFixed(0)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Products ≤10 stock</p>
+                <p className="text-xs text-gray-500 mt-1">Per order</p>
               </div>
-              <div className="w-12 h-12 bg-red-600/20 rounded-xl flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-red-400" />
+              <div className="w-12 h-12 bg-green-600/20 rounded-xl flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-green-400" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Orders - Now takes full width */}
+      {/* Recent Orders */}
       <Card className="bg-gray-800/50 border-gray-700/50 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
@@ -543,7 +528,7 @@ export default function AdminDashboard() {
           {!dashboardData.recentOrders || dashboardData.recentOrders.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-400">No orders found</p>
+              <p className="text-gray-400">No recent orders found</p>
               <p className="text-gray-500 text-sm">Orders will appear here once customers start placing them</p>
             </div>
           ) : (
@@ -561,7 +546,9 @@ export default function AdminDashboard() {
                     <p className="text-gray-500 text-xs">{order.time}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-green-400 font-semibold">${order.amount.toFixed(2)}</p>
+                    <p className="text-green-400 font-semibold">
+                      ${order.amount.toFixed(2)}
+                    </p>
                   </div>
                 </div>
               ))}

@@ -4,7 +4,6 @@ import {
   Users,
   Package,
   ShoppingCart,
-  Settings,
   Star,
   Shield,
   ChevronRight,
@@ -18,7 +17,6 @@ const menu = [
   { to: "/admin/products", icon: Package, label: "Products" },
   { to: "/admin/orders", icon: ShoppingCart, label: "Orders" },
   { to: "/admin/reviews", icon: Star, label: "Reviews"},
-  { to: "/admin/settings", icon: Settings, label: "Settings" },
 ];
 
 export default function AdminSidebar({ isMobileMenuOpen = false, onMobileMenuClose = () => {} }) {
